@@ -1,0 +1,263 @@
+<?php
+// ini_set('display_errors', 1);
+// ini_set('display_startup_errors', 1);
+// error_reporting(E_ALL);
+  include_once '../db/connect_uploadhost.php';
+  date_default_timezone_set('Asia/Manila');
+  ini_set('memory_limit', '-1');
+  ini_set('max_execution_time', 600); 
+
+  header('Access-Control-Allow-Origin:*');
+  header('Content-Type: application/json');
+  header('Access-Control-Allow-Method: GET');
+  header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorozation, X-Request-With');
+
+  $requestMethod = $_SERVER["REQUEST_METHOD"];
+  $msg="";
+  $dupmsg="";
+  $errormsg="";
+  $responseNew = null;
+
+   // $requestMethod="POST";
+
+
+  if($requestMethod == 'POST'){
+    
+    $inputData = json_decode(file_get_contents("php://input"), TRUE);
+    //$inputData = json_decode($datasample, TRUE);
+      foreach($inputData['vehicles'] as $pss_json){
+        $catch_data = "";
+        $json_data = array('mv_file_no' =>  $pss_json['MV_FILE']);
+        //$url = "https://pmvic.api.lto.direct/ords/dl_interfaces/interface_PMVIC/v3/get_vehicleinfo";
+        $url = "https://pmvic.api.lto.direct/ords/dl_interfaces/interface_PMVIC/v3/get_vehicleinfo";
+       
+        $MODE=$pss_json['MODE'];
+        //$BRANCH_ID = $pss_json['BRANCH_ID'];
+        $QUEUE_ID=$pss_json['QUEUE_ID'];
+        //$INSPECTION_ID=$Inspection_IDN['Inspection_ID'];
+        $INSPECTOR_USERNAME=$pss_json['INSPECTOR_USERNAME'];
+        $STAGE_NO=$pss_json['STAGE_NO'];
+        $INSPECTION_REF_NO=$pss_json['INSPECTION_REF_NO'];
+        $TRANSACTION_NO=$pss_json['TRANSACTION_NO'];
+        $PURPOSE=$pss_json['PURPOSE'];
+        $PMVIC_CENTER=$pss_json['PMVIC_CENTER'];
+        $ITP_CODE = "Sys";
+        $VEHICLE_INFORMATION=json_encode($pss_json['VEHICLE_INFORMATION']);
+        $PLATE=$pss_json['PLATE_NUM'];
+        $MV_FILE=$pss_json['MV_FILE'];
+        $CHASSIS=$pss_json['CHASIS_NUM'];
+        $ENGINE=$pss_json['ENGINE_NUM'];
+        $NOISE=json_encode($pss_json['NOISE']);
+        
+        $EMISSIONS=json_encode($pss_json['EMISSIONS']);
+        $OPACITY=json_encode($pss_json['OPACITY']);
+        
+        $LIGHTS=json_encode($pss_json['LIGHTS']);
+        $SIDESLIP=json_encode($pss_json['SIDESLIP']);
+        $SUSPENSION=json_encode($pss_json['SUSPENSION']);
+        $BRAKES= json_encode($pss_json['BRAKES']);
+        $SPEEDOMETER=json_encode($pss_json['SPEEDOMETER']);
+        $DEFECTS= str_replace("'", "\'", json_encode($pss_json['DEFECTS']));
+        //$BRANCH_ID=$pss_json['BRANCH_ID'];
+        
+        $catch_data = sendToAPI($json_data,$url);
+        
+        $getI_ID = $catch_data["Inspection_ID"];
+
+        //echo "Inspection Id: ". $getI_ID;
+        //$emission_hc = ($catch_data["Test_Limits"]["emission_hc"] == "") ? 0 : substr($catch_data["Test_Limits"]["emission_hc"], 2);
+        //$emission_co = ($catch_data["Test_Limits"]["emission_co"] == "") ? 0 : substr($catch_data["Test_Limits"]["emission_co"], 2);
+        //$opacity_k = ($catch_data["Test_Limits"]["opacity_k"] == "") ? 0 : substr($catch_data["Test_Limits"]["opacity_k"], 2);
+        //$Fuel_Type = $catch_data["Vehicle_Information"]["Fuel_Type"];
+        $Date_Tested = date('Y/m/d H:i:s');
+        //$Date_Tested_end = strtotime($Date_Tested.' + 15 minute');
+        //$Date_Tested_end = date('Y/m/d H:i:s', $Date_Tested_end);
+        
+        
+        
+        $query = "";
+        $query = "SELECT * FROM tbl_dermalog WHERE TRANSACTION_NO = '$TRANSACTION_NO' AND MV_FILE='$MV_FILE' AND isDeleted = '0'";
+        $result = mysqli_query($conn,$query);
+        
+         
+        if(isset($getI_ID) && ((mysqli_num_rows($result) > 0) != true)){
+          
+          
+            $insert_new_data = "INSERT INTO tbl_dermalog ( DATE_CREATED ,MODE, QUEUE_ID, PLATE_NUM, MV_FILE, CHASIS_NUM, ENGINE_NUM, INSPECTION_ID, INSPECTOR_USERNAME, STAGE_NO, INSPECTION_REF_NO, TRANSACTION_NO, PURPOSE,PMVIC_CENTER,ITP_CODE, VEHICLE_INFORMATION, NOISE, EMISSIONS, OPACITY, LIGHTS, SIDESLIP, SUSPENSION, BRAKES, SPEEDOMETER,DEFECTS) 
+                                VALUES ('$Date_Tested','$MODE','$QUEUE_ID','$PLATE','$MV_FILE','$CHASSIS','$ENGINE','$getI_ID','$INSPECTOR_USERNAME','$STAGE_NO','$INSPECTION_REF_NO','$TRANSACTION_NO','$PURPOSE','$PMVIC_CENTER','$ITP_CODE','$VEHICLE_INFORMATION','$NOISE','$EMISSIONS','$OPACITY','$LIGHTS','$SIDESLIP','$SUSPENSION','$BRAKES','$SPEEDOMETER','$DEFECTS') ";
+            
+            $validate_insert = "";
+            $validate_insert = mysqli_query($conn,$insert_new_data);
+          
+            //echo "Inserting</br>";
+            if($validate_insert){
+              
+                            
+               $sql="SELECT * FROM tbl_dermalog WHERE (status is null or status='') and TRANSACTION_NO='$TRANSACTION_NO' order by id desc limit 1";
+               $sec_query=mysqli_query($conn, $sql);
+             //echo "Searching</br>";
+               while( $row=mysqli_fetch_array($sec_query) ) {
+                    $url1 = "https://pmvic.api.lto.direct/ords/dl_interfaces/interface_PMVIC/v3/store_testresults";  
+                    //echo "Search Found </br>";
+                    //$url1 = "https://pmvic.api.qa.lto.direct/ords/dl_interfaces/interface_PMVIC/v2/store_testresults";
+                 	$json_data1 = "";
+                    $json_data1 = '{    
+                                        "MODE" : "'.$row['MODE'].'", 
+                                        "QUEUE_ID"  : "" ,
+                                        "INSPECTION_ID" : "'.$getI_ID.'", 
+                                        "INSPECTOR_USERNAME" : "'.$row['INSPECTOR_USERNAME'].'", 
+                                        "STAGE_NO" : "'.$row['STAGE_NO'].'", 
+                                        "INSPECTION_REF_NO" : "'. $row['INSPECTION_REF_NO'].'",  
+                                        "TRANSACTION_NO ": "'.$row['TRANSACTION_NO'].'",  
+                                        "PURPOSE" : "'.$row['PURPOSE'].'",  
+                                        "PMVIC_CENTER" : "'. $row['PMVIC_CENTER'].'",  
+                                        "ITP_CODE":  "Sys", 
+                                        "VEHICLE_INFORMATION" :  '.($row['VEHICLE_INFORMATION']).', 
+                                        "NOISE" :'. ($row['NOISE']).', 
+                                        "EMISSIONS" : '.($row['EMISSIONS']).', 
+                                        "OPACITY" : '.($row['OPACITY']).', 
+                                        "LIGHTS" : '.($row['LIGHTS']).',
+                                        "ANGLE" : "",
+                                        "SIDESLIP" :'.($row['SIDESLIP']).', 
+                                        "SUSPENSION" : '.($row['SUSPENSION']).', 
+                                        "BRAKES" :  '.($row['BRAKES']).',
+                                        "DEFECTS" : '.($row['DEFECTS']).',                                       
+                                        "SPEEDOMETER"  : '.($row['SPEEDOMETER']).'
+
+                                    } ';
+                 //echo "Sending</br>";
+                // echo $json_data1;
+                 
+                 //die();
+                 //$response = sendToAPI($json_data1,$url1);
+                        //$server_dermalog='https://pmvic.api.lto.direct/ords/dl_interfaces/interface_PMVIC/v3/store_testresults';
+                        $sOutput="";
+                        $ch = curl_init();
+                        curl_setopt($ch, CURLOPT_URL,$url1);
+                        curl_setopt($ch, CURLOPT_VERBOSE, 1);
+                        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+                        curl_setopt($ch, CURLOPT_POST, 1);
+                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1); 
+                        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: text/xml'));
+                        curl_setopt($ch, CURLOPT_POSTFIELDS, $json_data1);
+                        $sOutput = curl_exec($ch);
+                          
+                        curl_close($ch);
+                  //echo "</br> System : " .$sOutput;
+                  $response = json_decode($sOutput, true);
+                  $json_file = json_encode($response);
+                 
+                  //echo "Sending Data Output : ".$res;
+                  //echo $res["RESPONSE"]; 
+                 //print_r($sOutput);
+          		//die();
+                 
+                    if($response["RESPONSE"]=="Success" || $response["RESPONSE"]=="SUCCESS"){
+                      $sql_update="UPDATE tbl_dermalog SET status='OK', SUCCESS_LOG = 'SUCCESS', OVERALL_EVALUATION ='$json_file' WHERE TRANSACTION_NO='$TRANSACTION_NO' ";
+                      $querys=mysqli_query($conn, $sql_update);
+                      
+                      if($querys){
+                            $msg = "OK";
+                            $status = 200;
+                            $responseNew = $response["RESPONSE"];
+                      }else{
+                            $msg = "No Response";
+                            $status = 204;
+                      }
+                      
+                    }else{
+                        $msg = "Not Modified";
+                        $status = 304;
+                      	$responseNew = $response["RESPONSE"];
+                    }
+                 
+                 
+                 
+                 
+                 
+               }
+             
+            }else{
+              $msg = "Error Saved";
+            }
+          
+        }elseif(mysqli_num_rows($result) > 0){
+          
+          $msg = "Duplicate Data";
+          $status = 409;
+          $responseNew = "MVIRS: ". $TRANSACTION_NO;
+          
+          
+        }elseif(mysqli_num_rows($result) == 0){
+            
+            $insert_new_data = "INSERT INTO tbl_dermalog ( DATE_CREATED ,MODE, QUEUE_ID, PLATE_NUM, MV_FILE, CHASIS_NUM, ENGINE_NUM, INSPECTION_ID, INSPECTOR_USERNAME, STAGE_NO, INSPECTION_REF_NO, TRANSACTION_NO, PURPOSE,PMVIC_CENTER,ITP_CODE, VEHICLE_INFORMATION, NOISE, EMISSIONS, OPACITY, LIGHTS, SIDESLIP, SUSPENSION, BRAKES, SPEEDOMETER,DEFECTS,ERROR_LOG) 
+                                VALUES ('$Date_Tested','$MODE','$QUEUE_ID','$PLATE','$MV_FILE','$CHASSIS','$ENGINE','$getI_ID','$INSPECTOR_USERNAME','$STAGE_NO','$INSPECTION_REF_NO','$TRANSACTION_NO','$PURPOSE','$PMVIC_CENTER','$ITP_CODE','$VEHICLE_INFORMATION','$NOISE','$EMISSIONS','$OPACITY','$LIGHTS','$SIDESLIP','$SUSPENSION','$BRAKES','$SPEEDOMETER','$DEFECTS', 'Data not Found in LTMS') ";
+            
+            $validate_insert = "";
+            $validate_insert = mysqli_query($conn,$insert_new_data);
+            
+            if($validate_insert){
+
+              
+              $msg = "OK";
+              $status = 200;
+              
+              
+            }else{
+              $msg = "Error Saved";
+            }
+            $msg = "Data not Found in LTMS";
+            $status = 404;
+        }
+        
+        
+      }
+    
+    
+    $data = [
+      'status' => $status,
+      'message' => $msg,
+      'response' => $responseNew
+    ];
+    echo json_encode($data);
+    
+  }else{
+
+    $data = [
+      'status' => 405,
+      'message' => $requestMethod. ' Method Not Allowed',
+    ];
+    
+    header("HTTP/1.0 405 Method Not Allowed");
+    echo json_encode($data);
+  }
+
+    function sendToAPI($json_data,$url){
+        $curl = curl_init($url);
+      curl_setopt($curl, CURLOPT_URL, $url);
+      curl_setopt($curl, CURLOPT_POST, true);
+      curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+
+      $headers = array(
+        "Accept: application/json",
+        "Content-Type: application/json",
+      );
+      curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+
+      $data = json_encode($json_data, JSON_PRETTY_PRINT);
+
+      curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
+
+      //for debug only!
+      curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+      curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+
+      $resp = curl_exec($curl);
+      curl_close($curl);
+      
+      return json_decode($resp, true);
+
+      //$Inspection_IDN = json_decode($resp, true);
+    }
+

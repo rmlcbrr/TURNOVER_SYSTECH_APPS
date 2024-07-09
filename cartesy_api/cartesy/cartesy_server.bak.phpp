@@ -1,0 +1,197 @@
+<?php
+//die();
+include_once '../db/connect_uploadhost.php';
+date_default_timezone_set('Asia/Manila');
+ini_set('memory_limit', '-1');
+ini_set('max_execution_time', 600); 
+
+header('Access-Control-Allow-Origin:*');
+header('Content-Type: application/json');
+header('Access-Control-Allow-Method: GET');
+header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorozation, X-Request-With');
+
+include('function.php');
+
+$requestMethod = $_SERVER["REQUEST_METHOD"];
+
+if($requestMethod == 'POST'){
+    
+    
+    $inputData = json_decode(file_get_contents("php://input"), TRUE);
+        
+
+    foreach($inputData['vehicles'] as $pss_json)
+        {
+      
+      $json_arr1 = array('mv_file_no' =>  $pss_json['MV_FILE']); 
+         
+      $url1 = "https://pmvic.api.lto.direct/ords/dl_interfaces/interface_PMVIC/v3/get_vehicleinfo";
+
+
+      $curl1 = curl_init($url1);
+      curl_setopt($curl1, CURLOPT_URL, $url1);
+      curl_setopt($curl1, CURLOPT_POST, true);
+      curl_setopt($curl1, CURLOPT_RETURNTRANSFER, true);
+
+      $headers1 = array(
+        "Accept: application/json",
+        "Content-Type: application/json",
+      );
+      curl_setopt($curl1, CURLOPT_HTTPHEADER, $headers1);
+
+      $data1 = json_encode($json_arr1, JSON_PRETTY_PRINT);
+
+      curl_setopt($curl1, CURLOPT_POSTFIELDS, $data1);
+
+      //for debug only!
+      curl_setopt($curl1, CURLOPT_SSL_VERIFYHOST, false);
+      curl_setopt($curl1, CURLOPT_SSL_VERIFYPEER, false);
+
+      $resp = curl_exec($curl1);
+      curl_close($curl1);
+
+      $Inspection_IDN = json_decode($resp, true);
+
+      
+      		if(isset($Inspection_IDN['Inspection_ID'])){
+              
+              
+            $pss_json['MODE'];
+           	$MODE=$pss_json['MODE'];
+            $BRANCH_ID = $pss_json['BRANCH_ID'];
+            $QUEUE_ID=$pss_json['QUEUE_ID'];
+            $INSPECTION_ID=$Inspection_IDN['Inspection_ID'];
+            $INSPECTOR_USERNAME=$pss_json['INSPECTOR_USERNAME'];
+            $STAGE_NO=$pss_json['STAGE_NO'];
+           	$INSPECTION_REF_NO=$pss_json['INSPECTION_REF_NO'];
+           	$TRANSACTION_NO=$pss_json['TRANSACTION_NO'];
+           	$PURPOSE=$pss_json['PURPOSE'];
+            $PMVIC_CENTER=$pss_json['PMVIC_CENTER'];
+            $ITP_CODE = "Sys";
+            $VEHICLE_INFORMATION=json_decode(json_encode($pss_json['VEHICLE_INFORMATION']));
+           	$PLATE=$pss_json['PLATE_NUM'];
+            $MV_FILE=$pss_json['MV_FILE'];
+           	$CHASSIS=$pss_json['CHASIS_NUM'];
+            $ENGINE=$pss_json['ENGINE_NUM'];
+           	$NOISE=json_decode(json_encode($pss_json['NOISE']));
+              
+           	$EMISSIONS=json_decode(json_encode($pss_json['EMISSIONS']));
+           	$OPACITY=json_decode(json_encode($pss_json['OPACITY']));
+              
+              
+              
+            $LIGHTS=json_decode(json_encode($pss_json['LIGHTS']));
+           	$SIDESLIP=json_decode(json_encode($pss_json['SIDESLIP']));
+           	$SUSPENSION=json_decode(json_encode($pss_json['SUSPENSION']));
+            $BRAKES= json_decode(json_encode($pss_json['BRAKES']));
+            $SPEEDOMETER=json_decode(json_encode($pss_json['SPEEDOMETER']));
+            $DEFECTS= json_decode(str_replace("'", "\'", json_encode($pss_json['DEFECT'])));
+            $BRANCH_ID=$pss_json['BRANCH_ID'];
+      
+      		$query = "SELECT * FROM tbl_dermalog WHERE TRANSACTION_NO = '$TRANSACTION_NO' and MV_FILE='$MV_FILE' and PLATE_NUM='$PLATE'";
+            $result_ref_id = mysqli_query($conn1,$query);
+              
+              $getDate = date('Y/m/d H:i:s');
+
+            if ($result_ref_id) {
+                if (mysqli_num_rows($result_ref_id) > 0) {
+                    echo json_encode('Duplicate');
+                } else {
+                                $insert_data_tobe_save = "INSERT INTO tbl_dermalog ( DATE_CREATED ,MODE, QUEUE_ID, PLATE_NUM, MV_FILE, CHASIS_NUM, ENGINE_NUM, INSPECTION_ID, INSPECTOR_USERNAME, STAGE_NO, INSPECTION_REF_NO, TRANSACTION_NO, PURPOSE,PMVIC_CENTER,ITP_CODE, VEHICLE_INFORMATION, NOISE, EMISSIONS, OPACITY, LIGHTS, SIDESLIP, SUSPENSION, BRAKES, SPEEDOMETER,DEFECTS) 
+            VALUES ('$getDate','$MODE','$QUEUE_ID','$PLATE','$MV_FILE','$CHASSIS','$ENGINE','$INSPECTION_ID','$INSPECTOR_USERNAME','$STAGE_NO','$INSPECTION_REF_NO','$TRANSACTION_NO','$PURPOSE','$PMVIC_CENTER','$ITP_CODE','$VEHICLE_INFORMATION','$NOISE','$EMISSIONS','$OPACITY','$LIGHTS','$SIDESLIP','$SUSPENSION','$BRAKES','$SPEEDOMETER','$DEFECTS') ";
+
+            $statement_second = mysqli_query($conn1,$insert_data_tobe_save);
+            
+            if($statement_second){
+                $sql="SELECT * FROM tbl_dermalog WHERE (status is null or status='') and INSPECTION_REF_NO='$TRANSACTION_NO' order by id desc limit 1";
+                $querys=mysqli_query($conn1, $sql); 
+                //$totalFiltered = mysqli_num_rows($query);
+               while( $row=mysqli_fetch_array($querys) ) { 
+                  $url = "https://pmvic.api.lto.direct/ords/dl_interfaces/interface_PMVIC/v3/store_testresults";
+                  $curl = curl_init($url);
+                  curl_setopt($curl, CURLOPT_URL, $url);
+                  curl_setopt($curl, CURLOPT_POST, true);
+                  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+                  $headers = array(
+                                  "Content-Type: application/json",);
+                  curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+               
+
+                $data = '{
+                    "MODE"  : "'.$row['MODE'].'", 
+                    "QUEUE_ID"  : "", 
+                    "INSPECTION_ID"  : "'.$row['INSPECTION_ID'].'", 
+                    "INSPECTOR_USERNAME" : "'.$row['INSPECTOR_USERNAME'].'", 
+                    "STAGE_NO"  : "'.$row['STAGE_NO'].'", 
+                    "INSPECTION_REF_NO" : "'.$row['INSPECTION_REF_NO'].'", 
+                    "TRANSACTION_NO" :  "'.$row['TRANSACTION_NO'].'", 
+                    "PURPOSE" :  "'.$row['PURPOSE'].'", 
+                    "PMVIC_CENTER" :  "'.$row['PMVIC_CENTER'].'", 
+                    "ITP_CODE" :  "Sys", 
+                    "VEHICLE_INFORMATION" :  '.$row['VEHICLE_INFORMATION'].', 
+                    "NOISE" :  '.$row['NOISE'].', 
+                    "EMISSIONS" :  '.$row['EMISSIONS'].', 
+                    "OPACITY" :  '.$row['OPACITY'].', 
+                    "LIGHTS" :  '.$row['LIGHTS'].', 
+                    "SPEEDOMETER" :  '.$row['SPEEDOMETER'].', 
+                    "SIDESLIP" : '.$row['SIDESLIP'].', 
+                    "SUSPENSION" :  '.$row['SUSPENSION'].', 
+                    "BRAKES" :  '.$row['BRAKES'].',
+                    "DEFECTS": '.$row['DEFECTS'].'
+                }';
+
+              curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
+  
+              //for debug only!
+              curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+              curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+
+              $resp = curl_exec($curl);
+              curl_close($curl);
+
+              $data = json_decode($resp);
+
+              //echo "Return Value : ".$data->RESPONSE."</br>";
+
+
+                if($data->RESPONSE=="Success" || $data->RESPONSE=="SUCCESS"){
+                      $sql_update="UPDATE tbl_dermalog SET status='OK', SUCCESS_LOG = 'SUCCESS', OVERALL_EVALUATION ='$resp' WHERE INSPECTION_REF_NO='$TRANSACTION_NO' ";
+                      $querys=mysqli_query($conn1, $sql_update);
+
+                if($querys){
+                      echo json_encode($data->RESPONSE);
+                  }else{
+                        echo json_encode('FAILED');
+                  }
+
+                  }else{
+                      //echo "Failed Sending to Server : ".$id."</br>";
+                      echo json_encode('Failed Sending to Server');
+                      }
+               
+              }
+              
+               }else{
+              echo("Error description: " . mysqli_error($conn1));
+              echo "Failed Saving to uploadclient";
+             }
+                }
+            } else {
+                echo 'Error: ' . mysqli_error();
+            }
+              
+            }
+
+			
+
+        }
+
+}else{
+
+    $data = [
+        'status' => 405,
+        'message' => $requestMethod. ' Method Not Allowed',
+    ];
+    header("HTTP/1.0 405 Method Not Allowed");
+    echo json_encode($data);
+}
